@@ -1,0 +1,195 @@
+---
+title: "Bank Debt Collection Recovery $ Stra"
+author: "Javeria Fiaz"
+date: "2023-10-06"
+output: html_document
+---
+
+```{r load-libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+```
+
+```{r load-data-file, message=FALSE, warning=FALSE}
+df_bank_data <- 
+  read_csv("I:/Internships/Technocolabs Softwares/Project Files/Week 1/Data/bank_data.csv")
+
+View(df_bank_data)
+
+```
+
+```{r data exploration}
+duplicated(df_bank_data)
+sum(duplicated(df_bank_data))  
+
+is.na(df_bank_data)
+sum(is.na(df_bank_data))
+
+max(df_bank_data$age)
+min(df_bank_data$age)
+
+max(df_bank_data$expected_recovery_amount)
+min(df_bank_data$expected_recovery_amount)
+```
+
+## Statistical test: age vs. expected recovery amount
+
+```{r scatter-plot, warning=FALSE}
+ggplot(df_bank_data, aes(x= expected_recovery_amount , y= age, color = age))+   geom_point(size = 0.6) +
+  xlim(0, 2000) +  
+  geom_vline(xintercept = 1000)+
+  labs(x = 'Expected Recovery Amount', y = 'Age') +
+  ggtitle('Scatter Plot: Expected Recovery Amount vs. Customer Age')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r kruskal-wallis-test}
+df_bank_data |> 
+  filter(df_bank_data$expected_recovery_amount> 900 & 
+         df_bank_data$expected_recovery_amount<= 1100) -> df_subset
+
+  result = kruskal.test(age~expected_recovery_amount, data = df_subset)
+  print(result)
+```
+p-value is greater than 0.05, means that no effect was observed. Age is relatively similar above and below the threshold.
+
+```{r average-age-using-mean}
+df_bank_data |> 
+  filter(df_bank_data$expected_recovery_amount> 900 & 
+         df_bank_data$expected_recovery_amount<= 1100)|>
+  summarise(avg_age =mean(age)) |> 
+  view()
+
+```
+
+##Statistical test: sex vs. expected recovery amount
+
+percentage of customers that are male does not jump across the $1000 threshold.
+```{r scatter-plot, warning=FALSE}
+ggplot(df_subset, aes(x= expected_recovery_amount ,
+                      y= (((sum(tolower(df_subset$sex) == "male")) / length(df_subset$sex))*100), color = sex)) + 
+  geom_point(data = filter(df_subset, sex == "Male"), size= 2) +
+  xlim(900, 1100) +  
+  labs(x = 'Expected Recovery Amount', y = 'Sex') +
+  geom_vline(xintercept = 1000)+
+  ggtitle('Scatter Plot: Expected Recovery Amount vs. Customer Sex')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+##Exploratory graphical analysis: recovery amount
+
+Method 1:
+```{r scatter-plot, warning=FALSE}
+ggplot(df_subset, aes(x= actual_recovery_amount, y= expected_recovery_amount, 
+                      color = expected_recovery_amount)) + 
+  geom_point(size= 1.5) +
+  ylim(900, 1100) +  
+  labs(x = 'Actual Recovery Amount', y = 'Expected Recovery Amount') +
+  ggtitle('Expected Recovery Amount (Y) vs. Actual Recovery Amount (X)')+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Method 2:
+```{r scatter-plot}
+plot(df_subset$actual_recovery_amount,df_subset$expected_recovery_amount, 
+     main='Expected Recovery Amount vs. Actual Recovery Amount', 
+     xlab='Actual Recovery Amount',ylab='Expected Recovery Amount') 
+# plot a regression line 
+abline(lm(expected_recovery_amount~actual_recovery_amount,data=df_subset),col='red')
+
+```
+Q: A key question is whether or not we see a discontinuity (jump) around the $1000 threshold.
+A: 
+
+
+## Statistical analysis: recovery amount
+
+kruskal test on expected recovery amount 900 to 1100(df_subset)
+```{r kruskal-test}
+result_1 = kruskal.test(actual_recovery_amount~expected_recovery_amount, data = df_subset)
+  print(result_1)
+  
+```
+
+```{r scatter-plot-of-p-value}
+ggplot(df_subset, aes(x = expected_recovery_amount, y = result_1$p.value)) +
+  geom_point() +
+  labs(x = 'Expected Recovery Amount', y = 'P-Value from Kruskal-Wallis Test') +
+  geom_hline(yintercept = 0.05, linetype = 'dashed', color = 'red') 
+
+```
+
+kruskal test on expected recovery amount 950 to 1050
+```{r kruskal-test}
+df_bank_data |> 
+  filter(df_bank_data$expected_recovery_amount> 950 & 
+         df_bank_data$expected_recovery_amount<= 1050) -> df_subset_1
+
+result_2 = kruskal.test(actual_recovery_amount~expected_recovery_amount, data = df_subset_1)
+  print(result_2)
+
+```
+
+```{r scatter-plot-of-p-value}
+ggplot(df_subset_1, aes(x = expected_recovery_amount, y = result_2$p.value)) +
+  geom_point() +
+  labs(x = 'Expected Recovery Amount', y = 'P-Value from Kruskal-Wallis Test') +
+  geom_hline(yintercept = 0.05, linetype = 'dashed', color = 'red') 
+
+```
+
+##Regression modeling
+With no threshold
+
+-> for 900-1100(df_subset)
+```{r linear-regression}
+simple.regession <- lm(actual_recovery_amount~expected_recovery_amount, data= df_subset)
+summary(simple.regession)
+```
+
+```{r scatter-plot}
+ggplot(df_subset, aes(x = expected_recovery_amount, y = actual_recovery_amount)) +
+  geom_point() +                  
+  geom_smooth(method = 'lm', se = FALSE, color = 'blue') +  
+  labs(x = 'Expected Recovery Amount', y = 'Actual Recovery Amount') +
+  ggtitle('Scatter Plot with Regression Line')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Adding true threshold
+
+-> for 950-1050(df_subset_1)
+```{r linear-regression_threshold}
+threshold <- 1000
+
+df_subset_1$threshold_indicator <- ifelse(df_subset_1$expected_recovery_amount >= threshold, 1, 0)
+
+simple.regession_1 <- lm(actual_recovery_amount~expected_recovery_amount + threshold_indicator, data= df_subset_1)
+summary(simple.regession_1)
+```
+
+
+```{r scatter-plot}
+ggplot(df_subset_1, aes(x = expected_recovery_amount, y = actual_recovery_amount)) +
+  geom_point() +                  
+  geom_smooth(method = 'lm', se = FALSE, color = 'blue') +  
+  labs(x = 'Expected Recovery Amount', y = 'Actual Recovery Amount') +
+  ggtitle('Scatter Plot with Regression Line(Threshold')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Using Logistic regression
+
+```{r}
+glm.regression=glm(threshold_indicator~expected_recovery_amount, data= df_subset_1, family = "binomial")
+summary(glm.regression)
+
+# Plot1
+ggplot(df_subset_1, aes(x= expected_recovery_amount, y=threshold_indicator ))+
+  geom_jitter(height = 0.05, alpha = .1)+
+  geom_vline(xintercept = threshold, linetype = "dashed", color = "red") +  
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se=FALSE)
+```
+
+
